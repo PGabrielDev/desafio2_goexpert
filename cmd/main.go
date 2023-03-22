@@ -1,5 +1,13 @@
 package main
 
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
 type viaCEP struct {
 	Cep         string `json:"cep"`
 	Logradouro  string `json:"logradouro"`
@@ -25,13 +33,56 @@ type viaCDN struct {
 }
 
 func main() {
-
-}
-
-func getEnderecoViaCEP(cep string, canal chan viaCEP) {
-
+	canal1 := make(chan viaCDN)
+	canal2 := make(chan viaCEP)
+	var cep string
+	fmt.Println("Digite o cep ex: 49160-000")
+	fmt.Scan(&cep)
+	go getEnderecoViaCEP(cep, canal2)
+	go getEnderecoViaCDN(cep, canal1)
+	select {
+	case msg := <-canal1:
+		fmt.Printf("Via CDN, %v \n", msg)
+	case msg := <-canal2:
+		fmt.Printf("Via CEP, %v \n", msg)
+	case <-time.After(time.Second):
+		fmt.Println("Timeout :/")
+	}
 }
 
 func getEnderecoViaCDN(cep string, canal chan viaCDN) {
+	client := http.Client{}
+	url := "https://cdn.apicep.com/file/apicep/" + cep + ".json"
+	res, err := client.Get(url)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	var viaCDN viaCDN
+	payload, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	if err := json.Unmarshal(payload, &viaCDN); err != nil {
+		fmt.Println(err.Error())
+	}
+	canal <- viaCDN
+}
+
+func getEnderecoViaCEP(cep string, canal chan<- viaCEP) {
+	client := http.Client{}
+	url := "http://viacep.com.br/ws/" + cep + "/json/"
+	res, err := client.Get(url)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	var viaCEP viaCEP
+	payload, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	if err := json.Unmarshal(payload, &viaCEP); err != nil {
+		fmt.Println(err.Error())
+	}
+	canal <- viaCEP
 
 }
